@@ -28,11 +28,9 @@
             overflow-y: auto;
         }
         #current-planet {
-            position: absolute;
-            top: 10px;
-            left: 10px;
+            margin-top: 20px;
             color: #fff;
-            font-size: 18px;
+            font-size: 14px;
         }
         #cockpit, #planet-screen {
             width: 1200px;
@@ -102,6 +100,14 @@
             padding: 5px 10px;
             cursor: pointer;
         }
+        .buy-button, .buy-max-button {
+            background: #0f0; /* Jasnozielony dla "Kup" i "Max" przy kupnie */
+            color: #000;
+        }
+        .sell-button, .sell-max-button {
+            background: #ff0; /* Żółty dla "Sprzedaj" i "Max" przy sprzedaży */
+            color: #000;
+        }
         input[type="number"] {
             width: 50px;
             background: #000;
@@ -114,30 +120,21 @@
             font-size: 14px;
         }
         #back-to-cockpit {
-            position: absolute;
-            bottom: 20px;
-            left: 700px;
-            transform: translateX(-50%);
-            background: #f00;
-            color: #fff;
+            margin: 10px;
+            background: #ff9999; /* Pastelowy jasny róż dla "Powrót do kokpitu" */
+            color: #000;
             padding: 10px 20px;
         }
         #back-to-planet {
-            position: absolute;
-            bottom: 20px;
-            left: 500px;
-            transform: translateX(-50%);
-            background: #0f0;
+            margin: 10px;
+            background: #90ee90; /* Pastelowa jasna zieleń dla "Powrót na planetę" */
             color: #000;
             padding: 10px 20px;
         }
         #planet-back-to-cockpit {
-            position: absolute;
-            bottom: 20px;
-            left: 600px;
-            transform: translateX(-50%);
-            background: #f00;
-            color: #fff;
+            margin-top: 20px;
+            background: #ff9999; /* Pastelowy jasny róż dla "Powrót do kokpitu" */
+            color: #000;
             padding: 10px 20px;
         }
         #inventory-list {
@@ -150,16 +147,14 @@
     <div id="game-container">
         <!-- Status statku (zawsze widoczny) -->
         <div id="ship-status">
-            <h2>Status statku</h2>
-            <p>Gotówka: <span id="credits">500</span> kredytów</p>
+            <p>Gotówka: <span id="credits">500</span> Kosmofranków</p>
             <p>Ładownia: <span id="cargo">0</span>%</p>
-            <p>Paliwo: <span id="fuel">100</span>%</p>
+            <p>StarDiesel: <span id="fuel">5000/5000</span> litrów</p>
             <p>Uszkodzenia: <span id="damage">0</span>%</p>
             <p>Podróże: <span id="trips">0</span></p>
             <div id="inventory-list"></div>
+            <div id="current-planet">Aktualna planeta: Ziemia</div>
         </div>
-        <!-- Aktualna planeta (zawsze widoczna) -->
-        <div id="current-planet">Aktualna planeta: Ziemia</div>
         <!-- Ekran kokpitu -->
         <div id="cockpit">
             <div id="star-map">
@@ -181,7 +176,8 @@
     <script>
         let credits = 500;
         let cargo = 0;
-        let fuel = 100;
+        let fuel = 5000; // 5000 litrów
+        const maxFuel = 5000; // Maksymalna pojemność baku
         let damage = 0;
         let trips = 0;
         let inventory = {
@@ -191,6 +187,21 @@
         let lastTransaction = "Brak ostatnich operacji.";
         let currentPlanet = "Ziemia";
         let currentPrices = {};
+        let fuelPrices = { // Kosmofranki za 100 litrów
+            "Ziemia": 10,  // 0.1 Kosmofranka/litr
+            "Glutozar": 8, // ~0.08 Kosmofranka/litr
+            "Waporon": 7,  // ~0.07 Kosmofranka/litr
+            "Kruszlandia": 6, // ~0.06 Kosmofranka/litr
+            "Żelkor": 5    // ~0.05 Kosmofranka/litr
+        };
+
+        const planets = {
+            "Ziemia": { x: 200, y: 100 },
+            "Glutozar": { x: 400, y: 300 },
+            "Waporon": { x: 600, y: 500 },
+            "Kruszlandia": { x: 800, y: 200 },
+            "Żelkor": { x: 1000, y: 400 }
+        };
 
         const baseLegalGoods = [
             { name: "Galaktyczne Gumisie", baseSellPrice: 15, cargoSize: 2 },
@@ -199,7 +210,7 @@
             { name: "Plazmowe Placki", baseSellPrice: 30, cargoSize: 8 },
             { name: "Wirujące Wafle", baseSellPrice: 35, cargoSize: 10 },
             { name: "Kwarcowe Klocki", baseSellPrice: 45, cargoSize: 13 },
-            { name: "Turbo Tłoki", baseSellPrice: 60, cargoSize: 16 },
+            { name: "Turbo Tłoki", baseSellPrice: 60, cargSize: 16 },
             { name: "Syntetyczne Świstaki", baseSellPrice: 70, cargoSize: 20 }
         ];
 
@@ -213,6 +224,30 @@
             { name: "Czarna Czekolada", baseSellPrice: 180, cargoSize: 25 },
             { name: "Meta Heisenberga", baseSellPrice: 300, cargoSize: 30 }
         ];
+
+        function calculateDistance(planet1, planet2) {
+            const p1 = planets[planet1];
+            const p2 = planets[planet2];
+            return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+        }
+
+        function calculateFuelCost(distance) {
+            const minDistance = 283; // Najkrótsza trasa
+            const maxDistance = 854; // Najdłuższa trasa
+            const minFuel = 500; // 500 litrów
+            const maxFuel = 1500; // 1500 litrów
+            if (distance <= minDistance) return minFuel;
+            if (distance >= maxDistance) return maxFuel;
+            return Math.round(minFuel + (distance - minDistance) * (maxFuel - minFuel) / (maxDistance - minDistance));
+        }
+
+        function updateFuelPrices(planet) {
+            const distanceFromEarth = calculateDistance("Ziemia", planet);
+            const maxDistance = 854; // Ziemia ↔ Żelkor
+            const basePrice = planet === "Ziemia" ? 10 : Math.round(10 - (distanceFromEarth / maxDistance) * 5); // 10-5 Kosmofranków za 100 litrów
+            const variation = Math.round(Math.random() * 4) - 2; // ±2 Kosmofranki
+            fuelPrices[planet] = Math.max(5, Math.min(10, basePrice + variation)); // 5-10 Kosmofranków za 100 litrów
+        }
 
         function generatePrices() {
             currentPrices = {
@@ -236,13 +271,12 @@
         document.getElementById('planet-Ziemia').classList.add('current');
 
         function updateStatus() {
-            document.getElementById('credits').innerText = credits;
+            document.getElementById('credits').innerText = Math.round(credits);
             document.getElementById('cargo').innerText = cargo;
-            document.getElementById('fuel').innerText = fuel;
+            document.getElementById('fuel').innerText = `${Math.round(fuel)}/${maxFuel}`; // Ułamek z pojemnością baku
             document.getElementById('damage').innerText = damage;
             document.getElementById('trips').innerText = trips;
-            document.getElementById('current-planet').innerText = `Aktualna planeta: ${currentPlanet}`;
-
+            
             // Aktualizacja listy towarów w ładowni
             let inventoryHTML = '<h3>Ładownia:</h3>';
             let hasItems = false;
@@ -260,15 +294,43 @@
             });
             if (!hasItems) inventoryHTML += '<p>Pusto</p>';
             document.getElementById('inventory-list').innerHTML = inventoryHTML;
+
+            // Aktualizacja aktualnej planety
+            document.getElementById('current-planet').innerText = `Aktualna planeta: ${currentPlanet}`;
         }
 
         function updateTransaction(message) {
             lastTransaction = message;
         }
 
+        function setMaxQty(type, index) {
+            const goods = currentPrices[type];
+            const item = goods[index];
+            const maxByCredits = Math.floor(credits / item.buyPrice);
+            const maxByCargo = Math.floor((100 - cargo) / item.cargoSize);
+            const maxQty = Math.min(maxByCredits, maxByCargo) || 0;
+            document.getElementById(`buy-qty-${type}-${index}`).value = maxQty;
+        }
+
+        function setMaxSellQty(type, index) {
+            const inv = type === 'legal' ? inventory.legal : inventory.illegal;
+            const maxQty = inv[index] || 0;
+            document.getElementById(`sell-qty-${type}-${index}`).value = maxQty;
+        }
+
+        function setMaxFuel() {
+            const fuelPricePer100 = fuelPrices[currentPlanet]; // Kosmofranki za 100 litrów
+            const fuelPricePerLiter = fuelPricePer100 / 100; // Kosmofranki za 1 litr
+            const maxByFuel = maxFuel - fuel; // Pozostała pojemność baku
+            const maxByCredits = Math.floor(credits / fuelPricePerLiter); // Max litrów za Kosmofranki
+            const maxFuelToBuy = Math.min(maxByFuel, maxByCredits); // Najmniejsza z dwóch wartości
+            const maxFuelAdjusted = Math.max(10, Math.floor(maxFuelToBuy / 10) * 10); // Minimum 10, kroki co 10
+            document.getElementById('fuel-qty').value = maxFuelAdjusted; // Ustawienie wartości w polu
+        }
+
         function travel(planet) {
             let optionsHTML = `
-                <h1 id="planet-name">Witaj na ${planet}</h1>
+                <h1 id="planet-name">Witaj na planecie ${planet}</h1>
                 <div class="option" onclick="showMarket('legal')">Targ</div>
                 <div class="option" onclick="showMarket('illegal')">Czarny Rynek</div>
                 <div class="option" onclick="showSpaceport()">Kosmodrom</div>
@@ -283,21 +345,26 @@
                 document.getElementById('spaceport').style.display = 'none';
                 document.getElementById('planet-options').style.display = 'block';
                 updateStatus();
-            } else if (fuel >= 10) {
-                fuel -= 10;
-                trips += 1;
-                document.querySelectorAll('.planet').forEach(p => p.classList.remove('current'));
-                document.getElementById(`planet-${planet}`).classList.add('current');
-                currentPlanet = planet;
-                generatePrices();
-                document.getElementById('cockpit').style.display = 'none';
-                document.getElementById('planet-screen').style.display = 'block';
-                document.getElementById('market').style.display = 'none';
-                document.getElementById('spaceport').style.display = 'none';
-                document.getElementById('planet-options').style.display = 'block';
-                updateStatus();
             } else {
-                console.log('Brak paliwa na podróż!');
+                const distance = calculateDistance(currentPlanet, planet);
+                const fuelCost = calculateFuelCost(distance); // W litrach
+                if (fuel >= fuelCost) {
+                    fuel -= fuelCost;
+                    trips += 1;
+                    document.querySelectorAll('.planet').forEach(p => p.classList.remove('current'));
+                    document.getElementById(`planet-${planet}`).classList.add('current');
+                    currentPlanet = planet;
+                    updateFuelPrices(planet);
+                    generatePrices();
+                    document.getElementById('cockpit').style.display = 'none';
+                    document.getElementById('planet-screen').style.display = 'block';
+                    document.getElementById('market').style.display = 'none';
+                    document.getElementById('spaceport').style.display = 'none';
+                    document.getElementById('planet-options').style.display = 'block';
+                    updateStatus();
+                } else {
+                    console.log('Brak StarDiesla na podróż! Potrzeba: ' + fuelCost + ' litrów');
+                }
             }
         }
 
@@ -312,14 +379,16 @@
                 const maxQty = Math.min(maxByCredits, maxByCargo) || 0;
                 marketHTML += `<tr>
                     <td>${item.name}</td>
-                    <td>${item.buyPrice}</td>
-                    <td>${item.sellPrice}</td>
+                    <td>${item.buyPrice} Cf$</td>
+                    <td>${item.sellPrice} Cf$</td>
                     <td>${inv[index]}</td>
                     <td>
                         <input type="number" id="buy-qty-${type}-${index}" min="1" max="${maxQty}" value="1">
-                        <button onclick="buy(${index}, '${type}')">Kup</button>
+                        <button class="buy-max-button" onclick="setMaxQty('${type}', ${index})">Max</button>
+                        <button class="buy-button" onclick="buy(${index}, '${type}')">Kup</button>
                         <input type="number" id="sell-qty-${type}-${index}" min="1" max="${inv[index]}" value="1">
-                        <button onclick="sell(${index}, '${type}')">Sprzedaj</button>
+                        <button class="sell-max-button" onclick="setMaxSellQty('${type}', ${index})">Max</button>
+                        <button class="sell-button" onclick="sell(${index}, '${type}')">Sprzedaj</button>
                     </td>
                 </tr>`;
             });
@@ -350,7 +419,7 @@
                 inv[index] += qty;
                 if (type === 'illegal' && Math.random() < 0.2) damage += 5;
                 updateStatus();
-                updateTransaction(`Kupiłeś ${qty} x ${item.name} za ${totalCost} kredytów.`);
+                updateTransaction(`Kupiłeś ${qty} x ${item.name} za ${totalCost} Kosmofranków.`);
                 showMarket(type);
             } else {
                 showMarket(type);
@@ -373,7 +442,7 @@
                 cargo -= totalCargo;
                 inv[index] -= qty;
                 updateStatus();
-                updateTransaction(`Sprzedałeś ${qty} x ${item.name} za ${item.sellPrice * qty} kredytów.`);
+                updateTransaction(`Sprzedałeś ${qty} x ${item.name} za ${item.sellPrice * qty} Kosmofranków.`);
                 showMarket(type);
             } else {
                 showMarket(type);
@@ -381,11 +450,13 @@
         }
 
         function showSpaceport() {
+            const fuelPricePer100 = fuelPrices[currentPlanet];
             const spaceportHTML = `
                 <h2>Kosmodrom</h2>
-                <p>Koszt paliwa: 1 kredyt za 1%</p>
-                <input type="number" id="fuel-qty" min="1" max="${100 - fuel}" value="1">
-                <button onclick="refuel()">Kup paliwo</button>
+                <p>StarDiesel: ${fuelPricePer100} Kosmofranków za 100 litrów</p>
+                <input type="number" id="fuel-qty" min="10" max="${maxFuel - fuel}" step="10" value="10">
+                <button class="buy-max-button" onclick="setMaxFuel()">Max</button>
+                <button class="buy-button" onclick="refuel()">Kup paliwo</button>
                 <div id="transaction-history">${lastTransaction}</div>
                 <button id="back-to-planet" onclick="backToPlanet()">Powrót na planetę</button>
                 <button id="back-to-cockpit" onclick="backToCockpit()">Powrót do kokpitu</button>
@@ -396,10 +467,12 @@
         }
 
         function refuel() {
+            const fuelPricePer100 = fuelPrices[currentPlanet]; // Kosmofranki za 100 litrów
+            const fuelPricePerLiter = fuelPricePer100 / 100; // Kosmofranki za 1 litr
             const qty = parseInt(document.getElementById('fuel-qty').value) || 0;
-            const cost = qty;
+            const cost = Math.round(qty * fuelPricePerLiter);
 
-            if (qty <= 0 || qty + fuel > 100) {
+            if (qty < 10 || qty % 10 !== 0 || qty + fuel > maxFuel) {
                 showSpaceport();
                 return;
             }
@@ -407,7 +480,7 @@
                 credits -= cost;
                 fuel += qty;
                 updateStatus();
-                updateTransaction(`Kupiłeś ${qty}% paliwa za ${cost} kredytów.`);
+                updateTransaction(`Kupiłeś ${qty} litrów StarDiesla za ${cost} Kosmofranków.`);
                 showSpaceport();
             } else {
                 showSpaceport();
