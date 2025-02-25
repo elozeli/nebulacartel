@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Nebula Cartel</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            color: #0ff;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        #game-container {
+            width: 1920px;
+            height: 880px;
+            margin: 100px auto 0;
+            position: relative;
+        }
+        #ship-status {
+            width: 720px;
+            height: 880px;
+            float: right;
+            padding: 20px;
+            position: absolute;
+            right: 0;
+            top: 0;
+            overflow-y: auto;
+        }
+        #current-planet {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #fff;
+            font-size: 18px;
+        }
+        #cockpit, #planet-screen {
+            width: 1200px;
+            height: 100%;
+            float: left;
+        }
+        #cockpit { display: block; }
+        #planet-screen { display: none; }
+        #star-map {
+            width: 1200px;
+            height: 880px;
+            position: relative;
+        }
+        .planet {
+            width: 100px;
+            height: 100px;
+            background: #0ff;
+            border-radius: 50%;
+            position: absolute;
+            cursor: pointer;
+            text-align: center;
+        }
+        .planet.current {
+            background: #f00;
+        }
+        .planet-name {
+            position: absolute;
+            top: 110px;
+            left: 0;
+            width: 100px;
+            color: #fff;
+        }
+        #planet-options {
+            text-align: center;
+            height: 600px;
+            position: relative;
+        }
+        .option {
+            width: 300px;
+            height: 150px;
+            background: #333;
+            display: inline-block;
+            margin: 20px 40px;
+            cursor: pointer;
+            line-height: 150px;
+            font-size: 24px;
+        }
+        #market, #spaceport {
+            display: none;
+            text-align: center;
+            height: 600px;
+            position: relative;
+        }
+        table {
+            width: 90%;
+            margin: 20px auto;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #0ff;
+            padding: 10px;
+        }
+        button {
+            background: #0ff;
+            color: #000;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        input[type="number"] {
+            width: 50px;
+            background: #000;
+            color: #0ff;
+            border: 1px solid #0ff;
+        }
+        #transaction-history {
+            margin: 10px auto;
+            color: #fff;
+            font-size: 14px;
+        }
+        #back-to-cockpit {
+            position: absolute;
+            bottom: 20px;
+            left: 700px;
+            transform: translateX(-50%);
+            background: #f00;
+            color: #fff;
+            padding: 10px 20px;
+        }
+        #back-to-planet {
+            position: absolute;
+            bottom: 20px;
+            left: 500px;
+            transform: translateX(-50%);
+            background: #0f0;
+            color: #000;
+            padding: 10px 20px;
+        }
+        #planet-back-to-cockpit {
+            position: absolute;
+            bottom: 20px;
+            left: 600px;
+            transform: translateX(-50%);
+            background: #f00;
+            color: #fff;
+            padding: 10px 20px;
+        }
+        #inventory-list {
+            margin-top: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <!-- Status statku (zawsze widoczny) -->
+        <div id="ship-status">
+            <h2>Status statku</h2>
+            <p>Gotówka: <span id="credits">500</span> kredytów</p>
+            <p>Ładownia: <span id="cargo">0</span>%</p>
+            <p>Paliwo: <span id="fuel">100</span>%</p>
+            <p>Uszkodzenia: <span id="damage">0</span>%</p>
+            <p>Podróże: <span id="trips">0</span></p>
+            <div id="inventory-list"></div>
+        </div>
+        <!-- Aktualna planeta (zawsze widoczna) -->
+        <div id="current-planet">Aktualna planeta: Ziemia</div>
+        <!-- Ekran kokpitu -->
+        <div id="cockpit">
+            <div id="star-map">
+                <div class="planet" id="planet-Ziemia" style="top: 100px; left: 200px;" onclick="travel('Ziemia')"><span class="planet-name">Ziemia</span></div>
+                <div class="planet" id="planet-Glutozar" style="top: 300px; left: 400px;" onclick="travel('Glutozar')"><span class="planet-name">Glutozar</span></div>
+                <div class="planet" id="planet-Waporon" style="top: 500px; left: 600px;" onclick="travel('Waporon')"><span class="planet-name">Waporon</span></div>
+                <div class="planet" id="planet-Kruszlandia" style="top: 200px; left: 800px;" onclick="travel('Kruszlandia')"><span class="planet-name">Kruszlandia</span></div>
+                <div class="planet" id="planet-Żelkor" style="top: 400px; left: 1000px;" onclick="travel('Żelkor')"><span class="planet-name">Żelkor</span></div>
+            </div>
+        </div>
+        <!-- Ekran planety -->
+        <div id="planet-screen">
+            <div id="planet-options"></div>
+            <div id="market"></div>
+            <div id="spaceport"></div>
+        </div>
+    </div>
+
+    <script>
+        let credits = 500;
+        let cargo = 0;
+        let fuel = 100;
+        let damage = 0;
+        let trips = 0;
+        let inventory = {
+            legal: Array(8).fill(0),
+            illegal: Array(8).fill(0)
+        };
+        let lastTransaction = "Brak ostatnich operacji.";
+        let currentPlanet = "Ziemia";
+        let currentPrices = {};
+
+        const baseLegalGoods = [
+            { name: "Galaktyczne Gumisie", baseSellPrice: 15, cargoSize: 2 },
+            { name: "Gwiezdne Gluty", baseSellPrice: 20, cargoSize: 4 },
+            { name: "Neonowy Nektar", baseSellPrice: 25, cargoSize: 6 },
+            { name: "Plazmowe Placki", baseSellPrice: 30, cargoSize: 8 },
+            { name: "Wirujące Wafle", baseSellPrice: 35, cargoSize: 10 },
+            { name: "Kwarcowe Klocki", baseSellPrice: 45, cargoSize: 13 },
+            { name: "Turbo Tłoki", baseSellPrice: 60, cargoSize: 16 },
+            { name: "Syntetyczne Świstaki", baseSellPrice: 70, cargoSize: 20 }
+        ];
+
+        const baseIllegalGoods = [
+            { name: "Cienisty Cukier", baseSellPrice: 80, cargoSize: 5 },
+            { name: "Chaos Kolba", baseSellPrice: 100, cargoSize: 8 },
+            { name: "Smoczy Szron", baseSellPrice: 110, cargoSize: 12 },
+            { name: "Ektoplazma", baseSellPrice: 120, cargoSize: 15 },
+            { name: "Żrąca Żelatyna", baseSellPrice: 140, cargoSize: 18 },
+            { name: "Krwawy Kryształ", baseSellPrice: 150, cargoSize: 22 },
+            { name: "Czarna Czekolada", baseSellPrice: 180, cargoSize: 25 },
+            { name: "Meta Heisenberga", baseSellPrice: 300, cargoSize: 30 }
+        ];
+
+        function generatePrices() {
+            currentPrices = {
+                legal: baseLegalGoods.map(item => {
+                    const multiplier = 0.7 + Math.random() * 0.6;
+                    const sellPrice = Math.round(item.baseSellPrice * multiplier);
+                    const buyPrice = Math.round(sellPrice * (1.05 + Math.random() * 0.35));
+                    return { name: item.name, sellPrice, buyPrice, cargoSize: item.cargoSize };
+                }),
+                illegal: baseIllegalGoods.map(item => {
+                    const multiplier = 0.7 + Math.random() * 0.6;
+                    const sellPrice = Math.round(item.baseSellPrice * multiplier);
+                    const buyPrice = Math.round(sellPrice * (1.05 + Math.random() * 0.35));
+                    return { name: item.name, sellPrice, buyPrice, cargoSize: item.cargoSize };
+                })
+            };
+        }
+
+        // Generuj ceny na starcie dla Ziemi
+        generatePrices();
+        document.getElementById('planet-Ziemia').classList.add('current');
+
+        function updateStatus() {
+            document.getElementById('credits').innerText = credits;
+            document.getElementById('cargo').innerText = cargo;
+            document.getElementById('fuel').innerText = fuel;
+            document.getElementById('damage').innerText = damage;
+            document.getElementById('trips').innerText = trips;
+            document.getElementById('current-planet').innerText = `Aktualna planeta: ${currentPlanet}`;
+
+            // Aktualizacja listy towarów w ładowni
+            let inventoryHTML = '<h3>Ładownia:</h3>';
+            let hasItems = false;
+            baseLegalGoods.forEach((item, index) => {
+                if (inventory.legal[index] > 0) {
+                    inventoryHTML += `<p>${item.name}: ${inventory.legal[index]}</p>`;
+                    hasItems = true;
+                }
+            });
+            baseIllegalGoods.forEach((item, index) => {
+                if (inventory.illegal[index] > 0) {
+                    inventoryHTML += `<p>${item.name}: ${inventory.illegal[index]}</p>`;
+                    hasItems = true;
+                }
+            });
+            if (!hasItems) inventoryHTML += '<p>Pusto</p>';
+            document.getElementById('inventory-list').innerHTML = inventoryHTML;
+        }
+
+        function updateTransaction(message) {
+            lastTransaction = message;
+        }
+
+        function travel(planet) {
+            let optionsHTML = `
+                <h1 id="planet-name">Witaj na ${planet}</h1>
+                <div class="option" onclick="showMarket('legal')">Targ</div>
+                <div class="option" onclick="showMarket('illegal')">Czarny Rynek</div>
+                <div class="option" onclick="showSpaceport()">Kosmodrom</div>
+                <button id="planet-back-to-cockpit" onclick="backToCockpit()">Powrót do kokpitu</button>
+            `;
+            document.getElementById('planet-options').innerHTML = optionsHTML;
+
+            if (planet === currentPlanet) {
+                document.getElementById('cockpit').style.display = 'none';
+                document.getElementById('planet-screen').style.display = 'block';
+                document.getElementById('market').style.display = 'none';
+                document.getElementById('spaceport').style.display = 'none';
+                document.getElementById('planet-options').style.display = 'block';
+                updateStatus();
+            } else if (fuel >= 10) {
+                fuel -= 10;
+                trips += 1;
+                document.querySelectorAll('.planet').forEach(p => p.classList.remove('current'));
+                document.getElementById(`planet-${planet}`).classList.add('current');
+                currentPlanet = planet;
+                generatePrices();
+                document.getElementById('cockpit').style.display = 'none';
+                document.getElementById('planet-screen').style.display = 'block';
+                document.getElementById('market').style.display = 'none';
+                document.getElementById('spaceport').style.display = 'none';
+                document.getElementById('planet-options').style.display = 'block';
+                updateStatus();
+            } else {
+                console.log('Brak paliwa na podróż!');
+            }
+        }
+
+        function showMarket(type) {
+            const goods = currentPrices[type];
+            const inv = type === 'legal' ? inventory.legal : inventory.illegal;
+            let marketHTML = '<h2>' + (type === 'legal' ? 'Targ' : 'Czarny Rynek') + '</h2>';
+            marketHTML += '<table><tr><th>Towar</th><th>Cena kupna</th><th>Cena sprzedaży</th><th>Posiadane</th><th>Akcje</th></tr>';
+            goods.forEach((item, index) => {
+                const maxByCredits = Math.floor(credits / item.buyPrice);
+                const maxByCargo = Math.floor((100 - cargo) / item.cargoSize);
+                const maxQty = Math.min(maxByCredits, maxByCargo) || 0;
+                marketHTML += `<tr>
+                    <td>${item.name}</td>
+                    <td>${item.buyPrice}</td>
+                    <td>${item.sellPrice}</td>
+                    <td>${inv[index]}</td>
+                    <td>
+                        <input type="number" id="buy-qty-${type}-${index}" min="1" max="${maxQty}" value="1">
+                        <button onclick="buy(${index}, '${type}')">Kup</button>
+                        <input type="number" id="sell-qty-${type}-${index}" min="1" max="${inv[index]}" value="1">
+                        <button onclick="sell(${index}, '${type}')">Sprzedaj</button>
+                    </td>
+                </tr>`;
+            });
+            marketHTML += '</table>';
+            marketHTML += `<div id="transaction-history">${lastTransaction}</div>`;
+            marketHTML += `<button id="back-to-planet" onclick="backToPlanet()">Powrót na planetę</button>`;
+            marketHTML += `<button id="back-to-cockpit" onclick="backToCockpit()">Powrót do kokpitu</button>`;
+            document.getElementById('market').innerHTML = marketHTML;
+            document.getElementById('market').style.display = 'block';
+            document.getElementById('planet-options').style.display = 'none';
+        }
+
+        function buy(index, type) {
+            const goods = currentPrices[type];
+            const inv = type === 'legal' ? inventory.legal : inventory.illegal;
+            const item = goods[index];
+            const qty = parseInt(document.getElementById(`buy-qty-${type}-${index}`).value) || 0;
+            const totalCost = item.buyPrice * qty;
+            const totalCargo = item.cargoSize * qty;
+
+            if (qty <= 0) {
+                showMarket(type);
+                return;
+            }
+            if (credits >= totalCost && cargo + totalCargo <= 100) {
+                credits -= totalCost;
+                cargo += totalCargo;
+                inv[index] += qty;
+                if (type === 'illegal' && Math.random() < 0.2) damage += 5;
+                updateStatus();
+                updateTransaction(`Kupiłeś ${qty} x ${item.name} za ${totalCost} kredytów.`);
+                showMarket(type);
+            } else {
+                showMarket(type);
+            }
+        }
+
+        function sell(index, type) {
+            const goods = currentPrices[type];
+            const inv = type === 'legal' ? inventory.legal : inventory.illegal;
+            const item = goods[index];
+            const qty = parseInt(document.getElementById(`sell-qty-${type}-${index}`).value) || 0;
+            const totalCargo = item.cargoSize * qty;
+
+            if (qty <= 0) {
+                showMarket(type);
+                return;
+            }
+            if (inv[index] >= qty) {
+                credits += item.sellPrice * qty;
+                cargo -= totalCargo;
+                inv[index] -= qty;
+                updateStatus();
+                updateTransaction(`Sprzedałeś ${qty} x ${item.name} za ${item.sellPrice * qty} kredytów.`);
+                showMarket(type);
+            } else {
+                showMarket(type);
+            }
+        }
+
+        function showSpaceport() {
+            const spaceportHTML = `
+                <h2>Kosmodrom</h2>
+                <p>Koszt paliwa: 1 kredyt za 1%</p>
+                <input type="number" id="fuel-qty" min="1" max="${100 - fuel}" value="1">
+                <button onclick="refuel()">Kup paliwo</button>
+                <div id="transaction-history">${lastTransaction}</div>
+                <button id="back-to-planet" onclick="backToPlanet()">Powrót na planetę</button>
+                <button id="back-to-cockpit" onclick="backToCockpit()">Powrót do kokpitu</button>
+            `;
+            document.getElementById('spaceport').innerHTML = spaceportHTML;
+            document.getElementById('spaceport').style.display = 'block';
+            document.getElementById('planet-options').style.display = 'none';
+        }
+
+        function refuel() {
+            const qty = parseInt(document.getElementById('fuel-qty').value) || 0;
+            const cost = qty;
+
+            if (qty <= 0 || qty + fuel > 100) {
+                showSpaceport();
+                return;
+            }
+            if (credits >= cost) {
+                credits -= cost;
+                fuel += qty;
+                updateStatus();
+                updateTransaction(`Kupiłeś ${qty}% paliwa za ${cost} kredytów.`);
+                showSpaceport();
+            } else {
+                showSpaceport();
+            }
+        }
+
+        function backToCockpit() {
+            document.getElementById('planet-screen').style.display = 'none';
+            document.getElementById('cockpit').style.display = 'block';
+        }
+
+        function backToPlanet() {
+            document.getElementById('market').style.display = 'none';
+            document.getElementById('spaceport').style.display = 'none';
+            document.getElementById('planet-options').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
